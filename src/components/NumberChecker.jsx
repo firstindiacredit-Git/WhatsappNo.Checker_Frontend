@@ -75,8 +75,8 @@ const NumberChecker = () => {
                         }
                     });
 
-                    // केवल पहले 10 नंबर ही भेजें
-                    resolve(extractedNumbers.slice(0, 10));
+                    // केवल पहले 100 नंबर भेजें (10 की जगह 100)
+                    resolve(extractedNumbers.slice(0, 100));
                 } catch (err) {
                     reject(err);
                 }
@@ -125,6 +125,38 @@ const NumberChecker = () => {
         }
     };
 
+    // ड्रैग एंड ड्रॉप हैंडलर्स
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.add('border-indigo-500', 'bg-indigo-50');
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
+    };
+
+    const handleDrop = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('border-indigo-500', 'bg-indigo-50');
+
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            const fileType = file.name.split('.').pop().toLowerCase();
+            
+            if (!['xlsx', 'xls', 'csv'].includes(fileType)) {
+                setFileUploadError("कृपया केवल Excel या CSV फ़ाइल अपलोड करें");
+                return;
+            }
+
+            handleFileUpload({ target: { files: [file] } });
+        }
+    };
+
     const checkNumbers = async () => {
         if (!numbers.trim()) {
             setError("Please enter at least one number");
@@ -146,7 +178,7 @@ const NumberChecker = () => {
                 numbers: numbersToCheck,
             }, {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 30000
+                timeout: 300000  // टाइमआउट को 5 मिनट (300000ms) तक बढ़ा दिया
             });
 
             console.log("Response received:", response.data);
@@ -171,7 +203,7 @@ const NumberChecker = () => {
             console.error("❌ Error checking numbers", err);
 
             if (err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED') {
-                setError("Unable to connect to server. Please check if the backend is running.");
+                setError("Request timeout. The process is taking longer than expected. Please try with fewer numbers or try again later.");
                 setServerStatus("disconnected");
             } else if (err.response) {
                 setError(`Server error: ${err.response.data.error || 'Unknown error'}`);
@@ -187,15 +219,30 @@ const NumberChecker = () => {
     const downloadCSV = () => {
         if (!results.length) return;
 
-        // CSV हेडर
-        let csvContent = "Number,Status\n";
+        // अलग-अलग arrays में नंबर्स को सेपरेट करें
+        const availableNumbers = results.filter(result => result.isOnWhatsApp)
+            .map(result => result.number || result.formattedNumber);
+        const nonAvailableNumbers = results.filter(result => !result.isOnWhatsApp)
+            .map(result => result.number || result.formattedNumber);
 
-        // प्रत्येक रिजल्ट को CSV लाइन में कनवर्ट करें
-        results.forEach(result => {
-            const number = result.number || result.formattedNumber;
-            const status = result.isOnWhatsApp ? "Available" : "Not Available";
-            csvContent += `${number},${status}\n`;
-        });
+        // सबसे लंबी array का साइज़ निकालें
+        const maxLength = Math.max(availableNumbers.length, nonAvailableNumbers.length);
+
+        // CSV हेडर
+        let csvContent = "Available Numbers,Non-Available Numbers\n";
+
+        // प्रत्येक रो के लिए डेटा जोड़ें
+        for (let i = 0; i < maxLength; i++) {
+            const availableNum = availableNumbers[i] || ""; // अगर नंबर नहीं है तो खाली स्ट्रिंग
+            const nonAvailableNum = nonAvailableNumbers[i] || ""; // अगर नंबर नहीं है तो खाली स्ट्रिंग
+            csvContent += `${availableNum},${nonAvailableNum}\n`;
+        }
+
+        // एक्स्ट्रा इन्फॉर्मेशन जोड़ें
+        csvContent += "\nSummary:\n";
+        csvContent += `Total Numbers Checked,${results.length}\n`;
+        csvContent += `Available Numbers,${availableNumbers.length}\n`;
+        csvContent += `Non-Available Numbers,${nonAvailableNumbers.length}\n`;
 
         // डाउनलोड करने के लिए ब्लॉब बनाएँ
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -204,7 +251,8 @@ const NumberChecker = () => {
         // डाउनलोड लिंक बनाएँ और क्लिक करें
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        link.setAttribute("download", "whatsapp_numbers.csv");
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        link.setAttribute("download", `whatsapp_numbers_${timestamp}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -252,23 +300,23 @@ const NumberChecker = () => {
                                     id="numbers"
                                     type="text"
                                     className="w-full p-2 sm:p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white text-sm"
-                                    placeholder="Enter numbers separated by commas (max 10)"
+                                    placeholder="Enter numbers separated by commas (max 100)"
                                     value={numbers}
                                     onChange={(e) => {
                                         const input = e.target.value;
                                         const numbersArray = input.split(',').map(n => n.trim()).filter(n => n);
-                                        if (numbersArray.length <= 10) {
+                                        if (numbersArray.length <= 100) {
                                             setNumbers(input);
                                         } else {
-                                            // Only keep the first 10 numbers
-                                            setNumbers(numbersArray.slice(0, 10).join(', '));
+                                            // Only keep the first 100 numbers
+                                            setNumbers(numbersArray.slice(0, 100).join(', '));
                                         }
                                     }}
                                 />
                                 <div className="flex justify-between mt-1 sm:mt-2">
                                     <p className="text-xs text-gray-500">Example: 919876543210, 918765432109</p>
                                     <p className="text-xs font-medium text-indigo-600">
-                                        {numbers ? numbers.split(',').filter(n => n.trim()).length : 0}/10 numbers
+                                        {numbers ? numbers.split(',').filter(n => n.trim()).length : 0}/100 numbers
                                     </p>
                                 </div>
                             </div>
@@ -279,6 +327,9 @@ const NumberChecker = () => {
                                 <label 
                                     htmlFor="excel-upload" 
                                     className="flex items-center justify-center w-full p-2 sm:p-3 border-2 border-dashed border-indigo-300 rounded-lg cursor-pointer hover:border-indigo-500 transition-all bg-blue-50 bg-opacity-70"
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
                                 >
                                     <div className="flex flex-col items-center justify-center py-2 sm:py-3">
                                         <svg className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

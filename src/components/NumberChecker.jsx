@@ -167,7 +167,7 @@ const NumberChecker = () => {
 
         setLoading(true);
         setError(null);
-        setResults([]); // रिक्वेस्ट से पहले results को खाली करें
+        setResults([]);
 
         try {
             const numbersToCheck = numbers.split(",")
@@ -176,36 +176,50 @@ const NumberChecker = () => {
 
             console.log("Checking numbers:", numbersToCheck);
 
-            const response = await axios.post(`${API_BASE_URL}/api/whatsapp/check`, {
-                numbers: numbersToCheck,
-            }, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 3600000  // टाइमआउट को 1 घंटे (3600000ms) तक बढ़ा दिया
+            // Create custom axios instance with increased timeout
+            const axiosInstance = axios.create({
+                baseURL: API_BASE_URL,
+                timeout: 300000, // 5 minutes timeout
+                headers: { 
+                    'Content-Type': 'application/json',
+                }
             });
 
-            console.log("Response received:", response.data);
-
-            // कंसोल पर response की ज़्यादा जानकारी लॉग करें
-            console.log("Response type:", typeof response.data);
-            console.log("Has results?", response.data.hasOwnProperty('results'));
-            console.log("Results type:", response.data.results ? typeof response.data.results : 'N/A');
-
-            // सावधानीपूर्वक results को सेट करें
-            if (response.data && response.data.results && Array.isArray(response.data.results)) {
-                setResults(response.data.results);
-            } else if (Array.isArray(response.data)) {
-                // अगर response.data ही एक array है
-                setResults(response.data);
-            } else {
-                console.error("Unexpected response format:", response.data);
-                setResults([]);
-                setError("Invalid response format from server");
+            // Split numbers into smaller batches of 20
+            const batchSize = 20;
+            const batches = [];
+            for (let i = 0; i < numbersToCheck.length; i += batchSize) {
+                batches.push(numbersToCheck.slice(i, i + batchSize));
             }
+
+            let allResults = [];
+            
+            // Process each batch
+            for (let batch of batches) {
+                try {
+                    const response = await axiosInstance.post('/api/whatsapp/check', {
+                        numbers: batch
+                    });
+
+                    if (response.data && response.data.results && Array.isArray(response.data.results)) {
+                        allResults = [...allResults, ...response.data.results];
+                    } else if (Array.isArray(response.data)) {
+                        allResults = [...allResults, ...response.data];
+                    }
+
+                    // Update results after each batch
+                    setResults(allResults);
+                } catch (batchError) {
+                    console.error("Error processing batch:", batchError);
+                    // Continue with next batch even if current fails
+                }
+            }
+
         } catch (err) {
             console.error("❌ Error checking numbers", err);
 
             if (err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED') {
-                setError("Request timeout. The process is taking longer than expected. Please try with fewer numbers or try again later.");
+                setError("Connection error. Please check your internet connection and try again.");
                 setServerStatus("disconnected");
             } else if (err.response) {
                 setError(`Server error: ${err.response.data.error || 'Unknown error'}`);

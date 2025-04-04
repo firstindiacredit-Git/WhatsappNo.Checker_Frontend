@@ -2,7 +2,7 @@ import axios from "axios";
 import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = "http://13.60.87.164:4000";
 
 // कंपनी लोगो URL - इसे अपने लोगो के URL से बदलें
 const COMPANY_LOGO = "https://crm.pizeonfly.com/Images/pizeonflylogo.png"; // अपने लोगो का URL यहाँ डालें

@@ -2,7 +2,9 @@ import axios from "axios";
 import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 
-const API_BASE_URL = "http://13.60.87.164:4000";
+// const API_BASE_URL = "http://localhost:4000";
+// const API_BASE_URL = "http://13.60.87.164:4000";
+const API_BASE_URL = "https://whatsapp.pizeonfly.com";
 
 // कंपनी लोगो URL - इसे अपने लोगो के URL से बदलें
 const COMPANY_LOGO = "https://crm.pizeonfly.com/Images/pizeonflylogo.png"; // अपने लोगो का URL यहाँ डालें
@@ -178,7 +180,7 @@ const NumberChecker = () => {
                 numbers: numbersToCheck,
             }, {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 300000  // टाइमआउट को 5 मिनट (300000ms) तक बढ़ा दिया
+                timeout: 3600000  // टाइमआउट को 1 घंटे (3600000ms) तक बढ़ा दिया
             });
 
             console.log("Response received:", response.data);

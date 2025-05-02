@@ -2,10 +2,11 @@ import axios from "axios";
 import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
+import { QRCodeSVG } from 'qrcode.react';
 
-// const API_BASE_URL = "http://localhost:4000";
+const API_BASE_URL = "http://localhost:4000";
 // const API_BASE_URL = "http://13.60.87.164:4000";
-const API_BASE_URL = "https://whatsapp.pizeonfly.com";
+// const API_BASE_URL = "https://whatsapp.pizeonfly.com";
 
 // कंपनी लोगो URL - इसे अपने लोगो के URL से बदलें
 const COMPANY_LOGO = "https://crm.pizeonfly.com/Images/pizeonflylogo.png"; // अपने लोगो का URL यहाँ डालें
@@ -378,6 +379,8 @@ const NumberChecker = () => {
     const [error, setError] = useState(null);
     const [fileUploadError, setFileUploadError] = useState(null);
     const [serverStatus, setServerStatus] = useState("unknown");
+    const [qrCode, setQrCode] = useState(null);
+    const [showQRCode, setShowQRCode] = useState(false);
 
     // सर्वर स्टेटस चेक करें
     const checkServerStatus = async () => {
@@ -396,7 +399,11 @@ const NumberChecker = () => {
     // कंपोनेंट माउंट होने पर सर्वर स्टेटस चेक करें
     useEffect(() => {
         checkServerStatus();
-        const interval = setInterval(checkServerStatus, 10000);
+        fetchQRCode();
+        const interval = setInterval(() => {
+            checkServerStatus();
+            fetchQRCode();
+        }, 10000);
         return () => clearInterval(interval);
     }, []);
 
@@ -653,6 +660,40 @@ const NumberChecker = () => {
         document.body.removeChild(link);
     };
 
+    // Add this function to fetch QR code
+    const fetchQRCode = async () => {
+        if (serverStatus === "connected") return; // Don't fetch if already connected
+        
+        try {
+            const response = await axios.get(`${API_BASE_URL}/api/whatsapp/qr`);
+            if (response.data.success) {
+                if (response.data.qrCode && !response.data.isConnected) {
+                    setQrCode(response.data.qrCode);
+                    setShowQRCode(true);
+                } else {
+                    setQrCode(null);
+                    setShowQRCode(false);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching QR code:', error);
+        }
+    };
+
+    // Update useEffect to fetch QR code more frequently when not connected
+    useEffect(() => {
+        const checkStatus = async () => {
+            await checkServerStatus();
+            if (serverStatus !== "connected") {
+                await fetchQRCode();
+            }
+        };
+
+        checkStatus();
+        const interval = setInterval(checkStatus, 5000); // Check every 5 seconds
+        return () => clearInterval(interval);
+    }, [serverStatus]);
+
     return (
         <div className="flex flex-col items-center justify-center min-h-screen w-full p-2 sm:p-4 bg-gray-50">
             {/* Header Section */}
@@ -895,6 +936,39 @@ const NumberChecker = () => {
                     © {new Date().getFullYear()} WhatsApp Number Checker | All Rights Reserved
                 </p>
             </div>
+
+            {/* QR Code Modal */}
+            {showQRCode && qrCode && serverStatus !== "connected" && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4">
+                        <div className="text-center mb-4">
+                            <h3 className="text-lg font-semibold text-gray-800">Scan QR Code</h3>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Open WhatsApp on your phone and scan this QR code to connect
+                            </p>
+                        </div>
+                        
+                        <div className="flex justify-center mb-4">
+                            <QRCodeSVG 
+                                value={qrCode} 
+                                size={256} 
+                                level="H"
+                                includeMargin={true}
+                                className="border-4 border-white rounded-lg shadow-lg"
+                            />
+                        </div>
+                        
+                        <div className="text-center">
+                            <button
+                                onClick={() => setShowQRCode(false)}
+                                className="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-all text-sm"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

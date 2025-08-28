@@ -3,9 +3,19 @@ import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
 
-// const API_BASE_URL = "http://localhost:4000";
+const API_BASE_URL = "http://localhost:4000";
 // const API_BASE_URL = "http://13.60.87.164:4000";
-const API_BASE_URL = "https://whatsapp.pizeonfly.com";
+// const API_BASE_URL = "https://whatsapp.pizeonfly.com";
+
+// Add fallback URLs for different environments
+const getApiUrl = () => {
+    // Try localhost first
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return "http://localhost:4000";
+    }
+    // Fallback to production URL
+    return "https://whatsapp.pizeonfly.com";
+};
 
 // कंपनी लोगो URL - इसे अपने लोगो के URL से बदलें
 const COMPANY_LOGO = "https://crm.pizeonfly.com/Images/pizeonflylogo.png"; // अपने लोगो का URL यहाँ डालें
@@ -382,14 +392,18 @@ const NumberChecker = () => {
     // सर्वर स्टेटस चेक करें
     const checkServerStatus = async () => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/api/whatsapp/status`);
+            const apiUrl = getApiUrl();
+            const response = await axios.get(`${apiUrl}/api/whatsapp/status`, {
+                timeout: 5000 // 5 second timeout
+            });
             if (response.data.success) {
                 setServerStatus(response.data.connected ? "connected" : "disconnected");
                 setError(null);
             }
         } catch (err) {
+            console.error('Server status check failed:', err);
             setServerStatus("disconnected");
-            setError("Cannot connect to server. Please make sure the server is running.");
+            setError("Cannot connect to server. Please make sure the server is running on port 4000.");
         }
     };
 
@@ -556,8 +570,9 @@ const NumberChecker = () => {
             console.log("Checking numbers:", numbersToCheck);
 
             // Create custom axios instance with increased timeout
+            const apiUrl = getApiUrl();
             const axiosInstance = axios.create({
-                baseURL: API_BASE_URL,
+                baseURL: apiUrl,
                 timeout: 300000, // 5 minutes timeout
                 headers: { 
                     'Content-Type': 'application/json',

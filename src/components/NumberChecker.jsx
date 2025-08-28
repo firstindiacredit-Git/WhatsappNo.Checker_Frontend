@@ -17,6 +17,42 @@ const getApiUrl = () => {
     return "https://whatsapp.pizeonfly.com";
 };
 
+// QR code utility functions
+const generateQRCodeImage = (qrData) => {
+    try {
+        // Convert QR data to proper format for display
+        const qrString = qrData;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size
+        canvas.width = 256;
+        canvas.height = 256;
+        
+        // Create QR code using a simple pattern (you might want to use a proper QR library)
+        const cellSize = 8;
+        const cells = qrString.length;
+        const gridSize = Math.sqrt(cells);
+        
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = 'black';
+        for (let i = 0; i < cells; i++) {
+            const x = (i % gridSize) * cellSize;
+            const y = Math.floor(i / gridSize) * cellSize;
+            if (qrString[i] === '1') {
+                ctx.fillRect(x, y, cellSize, cellSize);
+            }
+        }
+        
+        return canvas.toDataURL();
+    } catch (error) {
+        console.error('Error generating QR code image:', error);
+        return null;
+    }
+};
+
 // कंपनी लोगो URL - इसे अपने लोगो के URL से बदलें
 const COMPANY_LOGO = "https://crm.pizeonfly.com/Images/pizeonflylogo.png"; // अपने लोगो का URL यहाँ डालें
 
@@ -388,6 +424,9 @@ const NumberChecker = () => {
     const [error, setError] = useState(null);
     const [fileUploadError, setFileUploadError] = useState(null);
     const [serverStatus, setServerStatus] = useState("unknown");
+    const [qrCode, setQrCode] = useState(null);
+    const [showQR, setShowQR] = useState(false);
+    const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
     // सर्वर स्टेटस चेक करें
     const checkServerStatus = async () => {
@@ -397,14 +436,83 @@ const NumberChecker = () => {
                 timeout: 5000 // 5 second timeout
             });
             if (response.data.success) {
-                setServerStatus(response.data.connected ? "connected" : "disconnected");
+                const wasConnected = serverStatus === "connected";
+                const isNowConnected = response.data.connected;
+                
+                setServerStatus(isNowConnected ? "connected" : "disconnected");
                 setError(null);
+                
+                // If not connected, try to get QR code
+                if (!isNowConnected) {
+                    // Only auto-fetch QR code if we just disconnected or if QR is not already shown
+                    if (!wasConnected || !showQR) {
+                        await fetchQRCode();
+                    }
+                } else {
+                    // If connected, hide QR code
+                    setQrCode(null);
+                    setShowQR(false);
+                }
             }
         } catch (err) {
             console.error('Server status check failed:', err);
             setServerStatus("disconnected");
             setError("Cannot connect to server. Please make sure the server is running on port 4000.");
         }
+    };
+
+    // QR कोड fetch करें
+    const fetchQRCode = async () => {
+        try {
+            const apiUrl = getApiUrl();
+            const response = await axios.get(`${apiUrl}/api/whatsapp/qr`, {
+                timeout: 5000
+            });
+            if (response.data.success && response.data.qr) {
+                setQrCode(response.data);
+                setShowQR(true);
+            } else {
+                setQrCode(null);
+                setShowQR(false);
+            }
+        } catch (err) {
+            console.error('QR code fetch failed:', err);
+            setQrCode(null);
+            setShowQR(false);
+        }
+    };
+
+    // WhatsApp से disconnect करें
+    const disconnectWhatsApp = async () => {
+        try {
+            setLoading(true);
+            setShowDisconnectConfirm(false);
+            const apiUrl = getApiUrl();
+            const response = await axios.post(`${apiUrl}/api/whatsapp/disconnect`, {}, {
+                timeout: 10000
+            });
+            
+            if (response.data.success) {
+                setServerStatus("disconnected");
+                setQrCode(null);
+                setShowQR(false);
+                setError(null);
+                // Automatically fetch new QR code after disconnect
+                setTimeout(() => {
+                    fetchQRCode();
+                }, 2000);
+            }
+        } catch (err) {
+            console.error('Disconnect failed:', err);
+            setError("Failed to disconnect. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Show disconnect confirmation
+    const handleDisconnectClick = () => {
+        setShowDisconnectConfirm(true);
     };
 
     // कंपोनेंट माउंट होने पर सर्वर स्टेटस चेक करें
@@ -685,20 +793,143 @@ const NumberChecker = () => {
                     Instantly verify if phone numbers are registered on WhatsApp. Upload Excel files or enter numbers manually to check availability.
                 </p>
                 
-                {/* Server Status Badge */}
-                <div className="inline-flex items-center justify-center px-2 sm:px-3 py-1 rounded-full bg-gray-50 border border-gray-200 shadow-sm">
-                    <div className={`w-2 h-2 rounded-full mr-1 sm:mr-2 ${
-                        serverStatus === "connected" ? "bg-green-500 animate-pulse" : 
-                        serverStatus === "disconnected" ? "bg-red-500" : "bg-yellow-500"
-                    }`}></div>
-                    <span className="text-xs font-medium text-gray-700">
-                        {serverStatus === "connected" ? "Server Online" : 
-                        serverStatus === "disconnected" ? "Server Offline" : "Connecting..."}
-                    </span>
-                </div>
-            </div>
-            
-            <div className="w-full max-w-5xl relative">
+                                 {/* Server Status Badge */}
+                 <div className="flex items-center justify-center gap-2">
+                     <div className="inline-flex items-center justify-center px-2 sm:px-3 py-1 rounded-full bg-gray-50 border border-gray-200 shadow-sm">
+                         <div className={`w-2 h-2 rounded-full mr-1 sm:mr-2 ${
+                             serverStatus === "connected" ? "bg-green-500 animate-pulse" : 
+                             serverStatus === "disconnected" ? "bg-red-500" : "bg-yellow-500"
+                         }`}></div>
+                         <span className="text-xs font-medium text-gray-700">
+                             {serverStatus === "connected" ? "Server Online" : 
+                             serverStatus === "disconnected" ? "Server Offline" : "Connecting..."}
+                         </span>
+                     </div>
+                     
+                     {/* Disconnect Button - Only show when connected */}
+                     {serverStatus === "connected" && (
+                         <button
+                             onClick={handleDisconnectClick}
+                             disabled={loading}
+                             className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                             title="Disconnect current WhatsApp and connect to a different account"
+                         >
+                             <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                             </svg>
+                             Disconnect
+                         </button>
+                     )}
+                 </div>
+                
+                                 {/* QR Code Section */}
+                 {showQR && qrCode && (
+                     <div className="mt-4 p-4 bg-white rounded-xl border border-gray-200 shadow-sm max-w-sm mx-auto">
+                         <div className="text-center">
+                             <h3 className="text-sm font-semibold text-gray-800 mb-2">Scan QR Code to Connect WhatsApp</h3>
+                             <div className="bg-white p-4 rounded-lg border border-gray-300 inline-block">
+                                 <div 
+                                     className="w-48 h-48 mx-auto bg-white flex items-center justify-center"
+                                     dangerouslySetInnerHTML={{
+                                         __html: qrCode.qr
+                                     }}
+                                 />
+                             </div>
+                             <p className="text-xs text-gray-600 mt-2">
+                                 Open WhatsApp on your phone and scan this QR code
+                             </p>
+                             <p className="text-xs text-gray-500 mt-1">
+                                 Expires in: {Math.floor(qrCode.expiresIn / 1000)}s
+                             </p>
+                             <div className="flex gap-2 justify-center mt-2">
+                                 <button
+                                     onClick={fetchQRCode}
+                                     className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+                                 >
+                                     Refresh QR Code
+                                 </button>
+                                 <button
+                                     onClick={() => {
+                                         setShowQR(false);
+                                         setQrCode(null);
+                                     }}
+                                     className="px-3 py-1 text-xs bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all"
+                                 >
+                                     Hide QR Code
+                                 </button>
+                             </div>
+                             
+                             {/* Disconnect Button in QR Section */}
+                             <div className="mt-3 pt-3 border-t border-gray-200">
+                                 <p className="text-xs text-gray-600 mb-2">Want to connect a different WhatsApp account?</p>
+                                 <button
+                                     onClick={handleDisconnectClick}
+                                     disabled={loading}
+                                     className="px-4 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center mx-auto"
+                                     title="Disconnect current WhatsApp and connect to a different account"
+                                 >
+                                     <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                     </svg>
+                                     Disconnect & Connect New Account
+                                 </button>
+                             </div>
+                         </div>
+                     </div>
+                 )}
+                 
+                 {/* Show QR Code Button when not connected */}
+                 {serverStatus === "disconnected" && !showQR && (
+                     <div className="mt-4 text-center">
+                         <button
+                             onClick={fetchQRCode}
+                             className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center mx-auto"
+                         >
+                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z"></path>
+                             </svg>
+                             Show QR Code
+                         </button>
+                     </div>
+                                  )}
+             </div>
+             
+             {/* Disconnect Confirmation Dialog */}
+             {showDisconnectConfirm && (
+                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                     <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+                         <div className="flex items-center mb-4">
+                             <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                                 <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                 </svg>
+                             </div>
+                             <h3 className="text-lg font-semibold text-gray-900">Disconnect WhatsApp?</h3>
+                         </div>
+                         <p className="text-sm text-gray-600 mb-6">
+                             This will disconnect your current WhatsApp account and allow you to connect a different one. 
+                             You'll need to scan a new QR code to connect the new account.
+                         </p>
+                         <div className="flex gap-3">
+                             <button
+                                 onClick={() => setShowDisconnectConfirm(false)}
+                                 className="flex-1 px-4 py-2 text-sm bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-all"
+                             >
+                                 Cancel
+                             </button>
+                             <button
+                                 onClick={disconnectWhatsApp}
+                                 disabled={loading}
+                                 className="flex-1 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                             >
+                                 {loading ? 'Disconnecting...' : 'Disconnect'}
+                             </button>
+                         </div>
+                     </div>
+                 </div>
+             )}
+             
+             <div className="w-full max-w-5xl relative">
                 {/* Main Content */}
                 <div className="relative">
                     <div className="flex flex-col lg:flex-row gap-4">

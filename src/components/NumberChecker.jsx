@@ -3,19 +3,8 @@ import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
 
-const API_BASE_URL = "http://localhost:4000";
-// const API_BASE_URL = "http://13.60.87.164:4000";
-// const API_BASE_URL = "https://whatsapp.pizeonfly.com";
-
-// Add fallback URLs for different environments
-const getApiUrl = () => {
-    // Try localhost first
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return "http://localhost:4000";
-    }
-    // Fallback to production URL
-    return "https://whatsapp.pizeonfly.com";
-};
+// API Base URL from environment variable
+const API_BASE_URL = "https://whatsapp.pizeonfly.com";
 
 // QR code utility functions
 const generateQRCodeImage = (qrData) => {
@@ -431,8 +420,7 @@ const NumberChecker = () => {
     // सर्वर स्टेटस चेक करें
     const checkServerStatus = async () => {
         try {
-            const apiUrl = getApiUrl();
-            const response = await axios.get(`${apiUrl}/api/whatsapp/status`, {
+            const response = await axios.get(`${API_BASE_URL}/api/whatsapp/status`, {
                 timeout: 5000 // 5 second timeout
             });
             if (response.data.success) {
@@ -464,8 +452,7 @@ const NumberChecker = () => {
     // QR कोड fetch करें
     const fetchQRCode = async () => {
         try {
-            const apiUrl = getApiUrl();
-            const response = await axios.get(`${apiUrl}/api/whatsapp/qr`, {
+            const response = await axios.get(`${API_BASE_URL}/api/whatsapp/qr`, {
                 timeout: 5000
             });
             if (response.data.success && response.data.qr) {
@@ -487,8 +474,7 @@ const NumberChecker = () => {
         try {
             setLoading(true);
             setShowDisconnectConfirm(false);
-            const apiUrl = getApiUrl();
-            const response = await axios.post(`${apiUrl}/api/whatsapp/disconnect`, {}, {
+            const response = await axios.post(`${API_BASE_URL}/api/whatsapp/disconnect`, {}, {
                 timeout: 10000
             });
             
@@ -678,9 +664,8 @@ const NumberChecker = () => {
             console.log("Checking numbers:", numbersToCheck);
 
             // Create custom axios instance with increased timeout
-            const apiUrl = getApiUrl();
             const axiosInstance = axios.create({
-                baseURL: apiUrl,
+                baseURL: API_BASE_URL,
                 timeout: 300000, // 5 minutes timeout
                 headers: { 
                     'Content-Type': 'application/json',

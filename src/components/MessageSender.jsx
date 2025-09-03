@@ -644,7 +644,7 @@ const MessageSender = () => {
 
     const checkServerStatus = async () => {
         try {
-            const response = await fetch('http://localhost:4000/api/whatsapp/status');
+            const response = await fetch(`${API_BASE_URL}/api/whatsapp/status`);
             
             if (response.ok) {
                 const data = await response.json();
